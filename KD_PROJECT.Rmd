@@ -1,0 +1,412 @@
+---
+title: "What happens when Kevin Durant plays on the road?"
+author: "Josh Mark"
+output: 
+    html_document:
+        code_folding: "hide"
+        toc: true 
+        toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+---
+
+## Introduction & Question Definition
+
+In September 2017, Kevin Durant's burner twitter accounts were [exposed](https://twitter.com/harrisonmc15/status/909634206355066880).The NBA star was a couple months removed from his first NBA Finals victory and was named Finals MVP in a win over the Cleveland Cavaliers, capping off an impressive 16-1 postseason record for the Golden State Warriors (GSW). Durant had been subject to harsh criticism the previous summer after electing to sign a free agent contract with the Warriors, after his OKC team lost in 7 games to the then 73-9 Warrior juggernaut. Durant and the Warriors had both seen 3-1 leads in playoff series diminish into defeats. Durant's decision to join the team that defeated his own was chided by fans, media and fellow players as a move that would destroy parity and competition in the league. It seemed that winning the 2017 title and Finals MVP would be enough for Durant to at least begin to silence his critics. However, KD still felt the need to defend himself anonymously on Twitter. Until it wasn't anonymous. As a world class athlete and icon, Durant is constantly under a microscope in the media. We've seen multiple interviews with Durant barking at the media calling them [blog boys](https://www.theringer.com/nba/2018/4/14/17237990/blog-boy-kevin-durant-bill-simmons-warriors-shirt), and claiming to not care what is said about him. The case against this can easily be made. We've come to know Durant as a sensitive individual in the media and wants to be liked. 
+
+There is nothing wrong with KD's desire to be admired, but some would prefer he admit the desire. From an analytical perspective, this made me curious to find out, **What happens when Kevin Durant plays on the road?** With opposing fans yelling at him that he's "soft", a "snake", or ["cupcake"](https://www.sbnation.com/lookit/2017/2/11/14589144/thunder-fans-are-chanting-cupcake-at-kevin-durant-heres-why), how does it impact his performance on the court? Does Durant focus more on his critics in the stands, and get distracted from the game? Or, does he find extra motivation from the criticism and actually play better away from home? Even if his performance is not statistically better or worse, he may play differently in visiting arenas, taking more shots from different areas of the court than he would at home. For the purposes of this analysis, **my focus is on Durant's performance as a member of the Golden State Warriors (2016-17, 2017-18, 2018-19 seasons)**. I elected this timeframe because prior to moving to GSW, Durant predominantly held a positive reputation with fans and the media. It was not until his move to "The Bay" that his critics began to show up in droves. 
+
+Note: throughout the analysis I refer to attempted shots as "field goals". Any reference to an attempted field goal, FG or shot taken are all synonymous, and represent any attempt by Durant (also referred to as KD) to score the basketball.
+
+## Data Collection & Cleaning
+
+Through [stats.nba.com](https://stats.nba.com/) I was able to collect all of Kevin Durant's attempted field goals in his career, beginning with his 2007-08 season in Seattle, up to his most recent field goal attempt in Game 5 of the 2019 Western Conference semi-finals, in which he injured his calf. At the time of this data collection and writing, Durant has not returned to action for the Warriors. The below code (unhide to view) was used to obtain the data for Durant's field goal attempts for all seasons played, both regular season and playoffs. To extract the data, the below methodology was used:
+
+1. Create vectors of regular seasons and playoffs for years Durant played. These seasons are used to then refer to which year the data is being extracted for.
+2. The code then utilizes a "for loop" to cycle through all years played and extract the shooting data one season at a time, while combining all years sequentially after getting the data from the NBA's website. 
+3. This code is repeated twice; first it is used to obtain all regular season data, then is repeated again to obtain playoffs data. 
+4. After regular season and playoff data is obtained, the two separate datasets are combined and comprise all field goals attempted by Durant in his career (note: this dataset does not include Free Throws).
+5. For ease of use and reproducibility, I exported the entire dataset as a separate file and uploaded it to Github, at the attached [link](https://raw.githubusercontent.com/joshdmark/shot_charts/master/kd_shot_data.csv). This allows for me (and other users) to obtain this dataset quickly and from any machine. 
+
+Ed Maia's tutorial on [How to Create NBA Shot Charts in R](https://thedatagame.com.au/2015/09/27/how-to-create-nba-shot-charts-in-r/) was used as the foundation for obtaining and plotting the data. He very clearly explains how the obtained data can be plotted for visualization and analysis. With the `loc_x` and `loc_y` variables in the dataset, the data is very friendly for `ggplot2`. These two variables can be used as the x and y coordinates for plots, and through use of either the `geom_hex` or `geom_point` functions, exact shot locations can be mapped. Using the `shot_made_flag` also allows for use of coloring the points on the graph to denote made and missed field goals.
+
+```{r, eval = F}
+## DATA EXTRACTION
+# regular season
+seasons <- c('2007-08', ## SEA
+             '2008-09', '2009-10', '2010-11', '2011-12', '2012-13', '2013-14', '2014-15', '2015-16',## OKC
+             '2016-17', '2017-18', '2018-19') ## GSW
+# playoffs 
+# seasons <- c('2009-10', '2010-11', '2011-12', '2012-13', '2013-14', '2015-16',## OKC
+#              '2016-17', '2017-18', '2018-19') ## GSW
+
+all_shots <- data.frame()
+
+## loop to call stats.nba.com and collect data
+for (season_id in seasons){
+  # print(season)
+  season <- season_id 
+  playerID <- 201142 # KD
+  season_type <- 'Regular+Season'
+  # season_type <- 'Playoffs'
+  shotURL <- paste("http://stats.nba.com/stats/shotchartdetail?CFID=33&CFPARAMS="
+                   ,season
+                   ,"&ContextFilter=&ContextMeasure=FGA&DateFrom=&DateTo=&GameID=&GameSegment=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerID="
+                   ,playerID
+                   ,"&PlayerPosition=&PlusMinus=N&Position=&Rank=N&RookieYear=&Season="
+                   ,season
+                   ,"&SeasonSegment=&SeasonType="
+                   ,season_type
+                   ,"&TeamID=0&VsConference=&VsDivision=&mode=Advanced&showDetails=0&showShots=1&showZones=0"
+                   ,sep = "")
+  shotData <- fromJSON(file = shotURL, method="C")
+  # unlist shot data, save into a data frame
+  fga <- data.frame(matrix(unlist(shotData$resultSets[[1]][[3]]), ncol=24, byrow = TRUE))
+  # fix column names
+  # colnames(fga) <- shotData$resultSets[[1]][[2]] %>% data.frame()
+  fga$season_nbr <- season
+  fga$season_type <- season_type
+  all_shots <- bind_rows(all_shots, fga)
+}
+
+## column names from NBA JSON are invalid, remove those columns and rename
+rm_season <- all_shots %>% dplyr::select(-season_nbr, -season_type) ## columns with invalid names
+season_col <- all_shots %>% dplyr::select(season_nbr, season_type) ## season_nbr, season_type columns (manually created)
+## get correct column names
+proper_names <- shotData$resultSets[[1]][[2]] %>% as.vector()
+## rename columns 
+colnames(rm_season) <- proper_names
+
+## combine data (regular season)
+reg_season <- cbind(rm_season, season_col) 
+## fix formatting on reg_season
+reg_season$LOC_X <- as.numeric(as.character(reg_season$LOC_X))
+reg_season$LOC_Y <- as.numeric(as.character(reg_season$LOC_Y))
+reg_season$SHOT_DISTANCE <- as.numeric(as.character(reg_season$SHOT_DISTANCE))
+write_rds(reg_season, "C:/Users/jdmark/Downloads/reg_season.RDS") ## write output RDS file
+
+## combine data (playoffs data)
+playoffs <- cbind(rm_season, season_col)
+## fix formatting on playoffs
+playoffs$LOC_X <- as.numeric(as.character(playoffs$LOC_X))
+playoffs$LOC_Y <- as.numeric(as.character(playoffs$LOC_Y))
+playoffs$SHOT_DISTANCE <- as.numeric(as.character(playoffs$SHOT_DISTANCE))
+write_rds(playoffs, "C:/Users/jdmark/Downloads/playoffs.RDS")
+
+## combine reg_season and playoffs as all_shots
+all_shots <- rbind(reg_season, playoffs)
+write_rds(all_shots, "C:/Users/jdmark/Downloads/all_shots.RDS")
+
+## clear directory and save space for data transformation
+rm(list=ls())
+
+## data transformation
+kd <- read_rds("C:/Users/jdmark/Downloads/all_shots.RDS")
+names(kd) <- str_to_lower(names(kd))
+## add away_ind
+kd <- kd %>% 
+    mutate(away_ind = case_when(
+        team_name == 'Seattle SuperSonics' & vtm == 'SEA' ~ 1
+        ,team_name == 'Oklahoma City Thunder' & vtm == 'OKC' ~ 1
+        ,team_name == 'Golden State Warriors' & vtm == 'GSW' ~ 1
+        ,TRUE ~ 0
+    ))
+## output csv for github
+write_csv(kd, "C:/Users/jdmark/Downloads/kd_shot_data.csv")
+
+## get court for plotting
+# half court image
+courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"
+court <- rasterGrob(readJPEG(getURLContent(courtImg.URL)),
+                    width=unit(1,"npc"), height=unit(1,"npc"))
+```
+
+In large part, the NBA (through Second Spectrum) does a great job of cleaning its datasets before making them public. After extracting the data, there was not an excessive amount of cleansing of the data required before I could begin analysis. The few cleansing steps included renaming columns and reformatting the names into lower case (personal preference), as well as changing the field goal location coordinates (`loc_x` and `loc_y` variables) into numeric values for plotting purposes. Because each NBA season is its own webpage, I added two variables inside the loop, `season_type` and `season_nbr` to identify whether the data was Regular Season or Playoffs, and which year the data represents. I also created an `away_ind` as a binary variable to represent whether Durant was playing at home (value of 0) or on the road (value of 1). Durant has taken 6 shots from behind half court (presumably at the end of quarters or halves) that I filter out in the analysis. Attempts like these are typically heaves that seldom go in the basket. My intent is to look at purposeful shots taken, so these backcourt shots are excluded.
+
+For plotting purposes, I also needed to obtain an image of an NBA court for visualizing where the field goals were attempted from. The url at  [https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg](https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg) hosts the jpg image of the court used for backgrounds of plotting field goals.
+
+--- 
+
+## Analysis
+
+The dataset obtained includes all of Durant's field goal attempts throughout his entire career, but we will only be looking at the past 3 seasons. Further studies could be done utilizing the entire dataset if desired. Before looking at the analysis and statistics, there is a limitation of the dataset that should be considered. The field goal dataset does not account for other players on the court, both Warriors' and opposition players. We're unable to draw inferences if any performance changes are due to the player guarding Durant, or if the other Warriors on the court play a role. I will make an assumption that all shots in the dataset are treated equally. 
+
+```{r}
+# warriors colors
+#006bb6 royal blue
+#26282a slate (black)
+#fdb927 yellow
+library(tidyverse)
+library(data.table)
+library(ggthemes)
+library(knitr)
+library(rjson)
+library(grid)
+library(jpeg)
+library(RCurl)
+library(gridExtra)
+## load kd data
+durant <- read_csv("https://raw.githubusercontent.com/joshdmark/shot_charts/master/kd_shot_data.csv") %>% data.frame() %>% 
+  mutate(Location = ifelse(away_ind == 1, 'AWAY', 'HOME')) %>% 
+  filter(shot_zone_area != 'Back Court(BC)')
+## filter to only GSW KD data
+gsw_kd <- durant %>% filter(team_name == 'Golden State Warriors')
+# half court image
+courtImg.URL <- "https://thedatagame.files.wordpress.com/2016/03/nba_court.jpg"
+court <- rasterGrob(readJPEG(getURLContent(courtImg.URL)),
+                    width=unit(1,"npc"), height=unit(1,"npc"))
+```
+
+Before taking a deeper look at the data we have, we will make sure that there is not any skewness in the dataset when comparing shots taken at home vs on the road. We can see that the data is relatively even when looking at overall measures between road and home games. KD has taken 98 more field goals on the road than he has at home, and on average takes slightly over 1 more shot in road games (18.51 vs 17.32 FGA per Game). 
+```{r}
+gsw_kd %>% group_by(Location) %>% 
+  summarise(`Field Goals Attempted (FGA)` = sum(shot_attempted_flag), 
+            `Games Played` = length(unique(game_id))) %>% 
+  mutate(`Pct. of FGA` = paste0(round(`Field Goals Attempted (FGA)` / 
+                                        sum(`Field Goals Attempted (FGA)`) * 100, 2), '%'), 
+         `FGA per Game` = round(`Field Goals Attempted (FGA)` / 
+                                  `Games Played`,2)) %>% 
+  select(1,2,4,5,3) %>% 
+  kable()
+```
+
+### Analysis (Shot Area Differences?)
+
+From a pure shot selection perspective, there does not seem to be a noticeable difference off the bat between where KD shoots from on the road vs at home. He appears to be covering all areas of the court: 3-pointers, mid-range, and shots near the rim. Figure 1 below plots all attempted field goals (makes and misses) from his 3 years with the Warriors. If we are going to make inferences, we'll need to look closer at the data.
+```{r}
+custom_court <- annotation_custom(court, -250, 250, -50, 420)
+gsw_kd %>% 
+  ggplot() + 
+  custom_court +
+  geom_hex(aes(loc_x,loc_y), fill = '#006bb6', bins = 75, alpha = .75) +
+  facet_wrap(~Location) + 
+  theme_fivethirtyeight() + 
+  theme(axis.text = element_blank(), 
+        axis.ticks = element_blank(), panel.grid = element_blank(),
+        strip.text.x = element_text(size = 15, color = 'black'), 
+        plot.title = element_text(hjust = 0.5)) + 
+  labs(x="", y=""
+       ,title="Kevin Durant Overall FGA Away vs Home"
+       ,caption = 'Figure 1') 
+```
+
+
+```{r}
+#006bb6 royal blue
+#26282a slate (black)
+#fdb927 yellow
+gsw_kd %>% 
+  mutate(shot_zone_range = factor(shot_zone_range
+                                  ,levels = c('Less Than 8 ft.', 
+                                              '8-16 ft.', 
+                                              '16-24 ft.', 
+                                              '24+ ft.'))) %>% 
+  group_by(Location, shot_zone_range) %>% 
+  summarise(fga = sum(shot_attempted_flag), 
+            fgp = round(mean(shot_made_flag),2)) %>% 
+  arrange(shot_zone_range) %>% 
+  ggplot() + 
+  geom_line(aes(shot_zone_range, fgp, 
+                group = Location, col = Location)) +
+  scale_color_manual(values = c('#fdb927', '#006bb6')) +
+  geom_text(aes(shot_zone_range, fgp, 
+                label = fgp, col = Location)) + 
+  annotate("rect", xmin = 2.9, xmax = 3.1, ymin = .48, 
+           ymax = .58, alpha = .2, fill = '#26282a') + 
+  labs(x="Shot Zone Range", y="FG %", 
+       caption = 'Figure 2', 
+       title = 'Kevin Durant FG % By Shot Range') + 
+  theme_fivethirtyeight() +
+  theme(legend.position = 'bottom', 
+        plot.title = element_text(hjust = 0.5)) 
+```
+
+One of the fields in the dataset is `shot_zone_range`, which has values of "Less Than 8 ft.", "8-16 ft.", "16-24 ft.", and "24+ ft.". In Figure 2 above, we see that Durant's performance is similar in 3 of the 4 main shot ranges, but there's a larger discrepancy in his mid range shots (16-24 ft.), where he shoots 6% better at home. Looking at the shot chart in Figure 3 below, his mid-range jumpshots are slightly more dispersed in away games. It looks like KD is able to "get to his spots" better at home, where a heavy concentration of his shots come from the elbow areas (directly to the left and right of the free throw line). In away games it looks like Durant may be less comfortable, and his shot locations are more sporadic, especially in the **bottom right corners of each plot in Figure 3**. In away games, KD is either catching the ball "deeper" (closer to the baseline), or is taking more dribbles towards the baseline before he shoots. This lack of comfort could be an explanation for his lower mid-range shooting percentage on the road. 
+
+```{r}
+gsw_kd %>% 
+  filter(shot_zone_range=='16-24 ft.') %>% 
+  ggplot() +
+  custom_court +
+  geom_hex(aes(loc_x,loc_y,
+               fill=event_type),bins=40,alpha=.9) +
+  scale_fill_manual(values=c('#31a354','darkgrey'))+
+  facet_wrap(~Location) + 
+  theme_fivethirtyeight() + 
+  theme(axis.text = element_blank(), 
+        axis.ticks = element_blank(), 
+        panel.grid = element_blank(),
+        strip.text.x = element_text(size = 15, color = 'black'), 
+        plot.title = element_text(hjust = 0.5)) + 
+  annotate("rect", xmin = 110, xmax = 210, ymin = -30, 
+           ymax = 100, alpha = .2, fill = '#26282a') + 
+  labs(fill='', caption = 'Figure 3', 
+       title = 'Kevin Durant Mid-Range FGA (16-24 ft.)')
+```
+
+### Analysis (Shot Making Differences?)
+
+While we can see differences in the locations of the shots, is it statistically significant? Using a t-test of means, the below output shows that when testing for statistical differences in the means of mid-range shots made, the difference is not statistically significant. In simpler terms, this tells us that although there is the 6% difference in percentages of makes, we cannot state that the effect of playing on the road conclusively affects Durant's shooting from 16 to 24 feet. The *p-value = .0761* in the below output would need to show a value of less than .05 in order to draw significant inferences. 
+
+```{r}
+midrange<- gsw_kd %>% filter(shot_zone_range=='16-24 ft.')
+set.seed(1)
+t.test(shot_made_flag ~ Location, data = midrange)
+```
+
+Though we are unable to prove statistical differences in *where* Durant shoots from in away games, I next look at his shooting effectiveness by period in games home vs road. In Figure 4's plots below, Period 4 includes all overtime periods as well as the 4th quarter. The top chart breaks down Durant's 2-point field goals compared to his 3-point field goals, whereas the bottom plot is overall shooting percentage with both types of shots combined. None of the differences by quarter are statistically significant, but we do notice that KD actually shoots 3% better from 3-point distance on the road in the 4th quarter and overtime (38% road vs 35% home). Contrarily, he's a 4% better 3-point shooter in the first quarters at Oracle Arena (42% home vs 38% road).
+```{r}
+#006bb6 royal blue
+#26282a slate (black)
+#fdb927 yellow
+
+## overall fgp
+df2<-gsw_kd %>% 
+  mutate(period = ifelse(period > 4, 4, period)) %>% 
+  group_by(period, Location,shot_type) %>% 
+  summarise(fga=sum(shot_attempted_flag), 
+            fgp=round(mean(shot_made_flag),2)) %>% 
+  arrange(period) 
+by_type <- ggplot(data = df2, aes(period, fgp, fill = Location, label = fgp)) +
+    geom_bar(stat = "identity", 
+             position = "dodge") +
+    geom_text(aes(y = fgp+.01), 
+              position = position_dodge(width = 0.9),size=3) + 
+  scale_fill_manual(values = c('#fdb927', '#006bb6')) + 
+  facet_wrap(~shot_type, scales = 'free') + 
+  theme_fivethirtyeight() + 
+  theme(legend.position = 'none') + 
+  labs(subtitle = "Overall FG% by Quarter (2's vs 3's)", 
+       x = 'Quarter', y = 'FG%') + 
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+## overall fgp
+df<-gsw_kd %>% 
+  mutate(period = ifelse(period > 4, 4, period)) %>% 
+  group_by(period, Location) %>% 
+  summarise(fga=sum(shot_attempted_flag), 
+            fgp=round(mean(shot_made_flag),2)) %>% 
+  arrange(period) 
+overall <- ggplot(data = df, 
+                  aes(period, fgp, 
+                      fill = Location, label = fgp)) +
+    geom_bar(stat = "identity", 
+             position = "dodge") +
+    geom_text(aes(y = fgp+.01), 
+              position = position_dodge(width = 0.9), size = 3) + 
+  scale_fill_manual(values = c('#fdb927', '#006bb6')) + 
+  theme_fivethirtyeight() + theme(legend.position = 'bottom') + 
+  labs(subtitle = 'Kevin Durant Overall FG% by Quarter', 
+       x = 'Quarter', y = 'FG%', 
+       caption = 'Figure 4') + 
+  theme(plot.subtitle = element_text(hjust = 0.5))
+
+# plot both charts together
+grid.arrange(by_type, overall) 
+```
+
+The table below is an additional check for differences in performance, and if Durant's play is affected particularly in the playoffs or regular season. Again, there are areas with discrepancies, but none that are significant. The largest discrepancy is this season's 2019 playoffs, where Durant shot 6.7% better from the field on the road (54.5% vs 47.8%). 
+```{r}
+gsw_kd %>% 
+  group_by(Location, season_type, season_nbr) %>% 
+  summarise(games = uniqueN(game_id), 
+            fgp = paste0(round(mean(shot_made_flag)*100,1),'%')) %>% 
+  arrange(season_type, season_nbr) %>% 
+  rename(`Season Type` = season_type, 
+         `Season` = season_nbr, 
+         `Games Played` = games, 
+         `FG%` = fgp) %>% 
+  kable()
+```
+
+### Analysis (Worst Performances?)
+
+Thus far we've been unable to find any significant differences between Durant's shooting performances by venue. If playing on the road won't rattle Durant, perhaps there are common themes among his worst games. The table below shows the statistics for Durant's 6 worst shooting games as a member of the Warriors; 4 of his 6 worst games are on the road (7 of his 10 worst as well are road games. Of his 10 *best* games, it's an even 5:5 split between home and away). The average number of field goals Durant attempts in a game is 17.9; I filtered out any games in which he took less than 10 shots for this analysis section. The one common theme among these 6 worst games is KD's 3-point shooting. Some basketball analysts say "live and die by the 3-point shot", and these games are great examples of that mindset (see Figure 5 shot charts below). Durant made at most one 3-pointer in these games, and had 2 outings without making any. In his worst game of all (2018-12-07 GSW @ MIL, middle chart on bottom row of Figure 5), KD couldn't get anything going. He made one 3-point basket, and missed his lone shot attempt in the paint (rectangular area near the basket). 
+```{r}
+library(lubridate)
+library(plotly)
+## average number of shots per game: 17.9
+avg_fga <- gsw_kd %>% 
+  summarise(total_games = uniqueN(game_id), 
+            shots = sum(shot_attempted_flag)) %>% 
+  mutate(avg_fga_pergame = shots / total_games)
+
+worst6 <- gsw_kd %>% 
+  mutate(opponent = ifelse(htm == 'GSW', vtm, htm)) %>% 
+  group_by(game_id) %>% 
+  mutate(total_fga = sum(shot_attempted_flag)) %>% 
+  ungroup() %>% 
+  filter(total_fga > 10) %>% 
+  group_by(game_id, Location, opponent) %>% 
+  summarise(fgp = mean(shot_made_flag)) %>% 
+  arrange(fgp) %>% data.frame() %>% 
+  slice(1:6)
+
+gsw_kd %>% 
+  filter(game_id %in% worst6$game_id) %>% 
+  group_by(game_id) %>% 
+  #mutate(#fgm = sum(shot_made_flag), 
+         #fga = sum(shot_attempted_flag), 
+         #fgp = mean(shot_made_flag)) %>% ungroup() %>% 
+  mutate(where = ifelse(Location == 'AWAY', '@', 'vs'), 
+         gameday = as.character(ymd(game_date)), 
+         opponent = ifelse(htm == 'GSW', vtm, htm)
+         ,game = ifelse(Location == 'AWAY'
+                       ,paste(gameday, 'GSW', where, opponent, sep = ' ') 
+                       ,paste(gameday, opponent, '@', 'GSW'))) %>% 
+         #game = paste(gameday, 'GSW', where, opponent, sep = ' ')) %>% 
+  group_by(game, Location) %>% 
+  summarise(fgm = sum(shot_made_flag), 
+         fga = sum(shot_attempted_flag), 
+         fgp = round(mean(shot_made_flag)*100,2)) %>% 
+  arrange(fgp) %>% 
+  select(Game = game
+         ,Location
+         ,`FG %` = 5
+         ,`FG Made` = 3 
+         ,`FG Attempted` = 4) %>% 
+  kable()
+
+custom_court <- annotation_custom(court, -250, 250, -50, 420)
+# plot worst 6 games
+gsw_kd %>% 
+  filter(game_id %in% worst6$game_id) %>% 
+  group_by(game_id) %>% 
+  mutate(fgm = sum(shot_made_flag), 
+         fga = sum(shot_attempted_flag), 
+         fgp = mean(shot_made_flag)) %>% ungroup() %>% 
+  mutate(where = ifelse(Location == 'AWAY', '@', 'vs'), 
+         gameday = as.character(ymd(game_date)), 
+         opponent = ifelse(htm == 'GSW', vtm, htm), 
+         game = ifelse(Location == 'AWAY'
+                       ,paste(gameday, 'GSW', where, opponent, sep = ' ') 
+                       ,paste(gameday, opponent, '@', 'GSW'))) %>% 
+  ggplot() + 
+  custom_court +
+  geom_point(aes(loc_x, loc_y, 
+                 color = event_type, shape = Location), 
+             size = 2.25, alpha = .8) + 
+  scale_color_manual(values = c('darkgreen', 'darkgrey')) +
+  theme_fivethirtyeight() + 
+  theme(legend.position = 'bottom'
+        ,axis.ticks = element_blank()
+        ,axis.text = element_blank()
+        ,plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "Kevin Durant's 6 Worst Shooting Games (GSW Career)"
+       ,caption = 'Figure 5'
+       ,fill = '') +
+  facet_wrap(~game) 
+```
+
+
+## Conclusions
+
+As it turns out, Kevin Durant may not be as sensitive to fans as some may think. We can see that there are numerical differences in some areas of his play, better mid-range shooter at Oracle and better on the road in the 2019 playoffs. However, our results are inconclusive in terms of proving significantly better or worse performance away from San Francisco. Durant may have an off night on the road here or there, but as an opposing fan, you're at his mercy. Our results do not allow us to conclude that fans are impacting KD's performance. 
+
+The final section of the analysis showed that despite we could not prove location of games impacts Durant's performance, his 3-point shooting can be his barometer. It doesn't matter if you're playing against KD in your building or his, if you can prevent him from shooting well from beyond the arc you have a better chance of him having a poor game.
+
+Follow-up studies looking to prove significance could include comparisons of Durant's road performance as a member of the Seattle SuperSonics/Oklahoma City Thunder (seasons prior to 2016) to his Golden State road games. If data was available on other players on the court, or the closest defender when a shot was taken, this could be an interesting study. For example, Los Angeles' Patrick Beverly was a pest to Durant in the first round of the 2019 playoffs. Was Durant any more or less effective against Beverly at Oracle Arena or at the Staples Center (the Clippers' home arena)? My hunch would be no; Durant scored 45 and 50 points respectively, in Games 5 and 6 of the series. Game 5 was at Oracle, and Game 6 was at the Staples Center.
